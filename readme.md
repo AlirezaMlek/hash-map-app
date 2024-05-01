@@ -43,25 +43,35 @@ You can check the application performance:
 ./test-client-send-multi <number of records>
 ```
 
+![Alt Text](./images/3.png)
+
+
 * ### HashMap:
 
 1. Test insert: add 1000 records to each bucket
 
 ```bash
-./test-insert <number of buckets>
+./test/test-insert <number of buckets>
 ```
+![Alt Text](./images/2-insert.png)
+
 
 2. Test delete: add a record and delete it
 
 ```bash
-./test-delete
+./test/test-delete
 ```
+
+![Alt Text](./images/2-delete.png)
+
 
 3. Test search: add a record and search it
 
 ```bash
-./test-search
+./test/test-search
 ```
+
+![Alt Text](./images/2-search.png)
 
 ## Scalability:
 
