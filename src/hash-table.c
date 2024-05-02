@@ -48,8 +48,8 @@ response_t insert_entity(HashTable *hashTable, int key, char* value) {
     Entry* newEntry = (Entry*)malloc(sizeof(Entry));
     if (!newEntry) {
         perror("Memory allocation failed");
-        pthread_rwlock_unlock(&hashTable->rwlock[index]);
         response.flag = ADDED_ABORT;
+        pthread_rwlock_unlock(&hashTable->rwlock[index]);
         return response;
     }
     newEntry->key = key;

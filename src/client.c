@@ -8,7 +8,6 @@
 #include <stdbool.h>
 #include "common.h"
 
-#define SHM_NAME "./app_shm"
 
 enum RequestType string_to_enum(const char *str) {
     if (strcmp(str, "insert") == 0) {
@@ -25,7 +24,7 @@ enum RequestType string_to_enum(const char *str) {
 
 
 
-bool checkFlag(char flag){
+bool check_flag(char flag){
     if (flag==ADDED_SUCCESS || flag==ADDED_ABORT || flag==DELETE_SUCCESS || flag==DELETE_ABORT || flag==FOUND || 
     flag==NOT_FOUND || flag==ERROR){
         return true;
@@ -43,52 +42,86 @@ int main(int argc, char *argv[]) {
         exit(EXIT_FAILURE);
     }
 
+    
+    int shm_fd_req;
+    int shm_fd_res;
+
     // Open shared memory
-    int shm_fd = shm_open(SHM_NAME, O_RDWR, 0666);
-    if (shm_fd == -1) {
-        perror("shm_open");
+    shm_fd_req = shm_open(SHM_NAME_REQ, O_CREAT | O_RDWR, 0777);
+    if (shm_fd_req == -1)
+    {
+        perror("shm_open request");
         exit(EXIT_FAILURE);
     }
 
+    shm_fd_res = shm_open(SHM_NAME_RES, O_CREAT | O_RDWR, 0777);
+    if (shm_fd_res == -1)
+    {
+        perror("shm_open response");
+        exit(EXIT_FAILURE);
+    }
+
+
     // Map shared memory for request
-    request_t* request = mmap(NULL, sizeof(request_t), PROT_READ | PROT_WRITE, MAP_SHARED, shm_fd, 0);
+    request_t* request = mmap(NULL, sizeof(request_t)*NUM_CACHE, PROT_WRITE | PROT_READ, MAP_SHARED, shm_fd_req, 0);
     if (request == MAP_FAILED) {
         perror("mmap");
         exit(EXIT_FAILURE);
     }
 
-    request->operation = string_to_enum(argv[1]);
-    request->key = atoi(argv[2]);
-    
-    if (request->operation == INSERT) {
-        strncpy(request->value, argv[3], MAX_VALUE_SIZE - 1); // Copy the value to request
-        request->value[MAX_VALUE_SIZE - 1] = '\0'; // Ensure null termination
-    } else {
-        // For other operations, set value to NULL
-        request->value[0] = '\0';
+
+    response_t* response = mmap(NULL, sizeof(response_t)*NUM_CACHE, PROT_WRITE | PROT_READ, MAP_SHARED, shm_fd_res, 0);
+    if (response == MAP_FAILED) {
+        perror("mmap");
+        exit(EXIT_FAILURE);
     }
+
+
+    int tid = 0;
+    int i;
+    for (i = 0; i < NUM_CACHE; i++)
+    {
+        if(atomic_load(&request[i].free) && request[i].mode==SERVER_READY){
+            atomic_store(&request[i].free, false);
+            request[i].operation = string_to_enum(argv[1]);
+            request[i].key = atoi(argv[2]);
+            
+            if (request[i].operation == INSERT) {
+                strncpy(request[i].value, argv[3], MAX_VALUE_SIZE - 1); // Copy the value to request
+                request[i].value[MAX_VALUE_SIZE - 1] = '\0'; // Ensure null termination
+            } else {
+                // For other operations, set value to NULL
+                request[i].value[0] = '\0';
+            }
+            request[i].mode = CLIENT_READY;
+
+            break;
+        }
+        tid ++;
+    }
+    
+    if(tid==NUM_CACHE){
+        perror("max-req");
+        exit(EXIT_FAILURE);
+    }
+    
+    
 
     // Wait for the response
     bool response_received = false;
-    response_t* response;
     while (!response_received) {
-        // Map shared memory for response
-        response = mmap(NULL, sizeof(response_t), PROT_READ | PROT_WRITE, MAP_SHARED, shm_fd, 0);
-        if (response == MAP_FAILED) {
-            perror("mmap");
-            exit(EXIT_FAILURE);
-        }
 
-        if (checkFlag(response->flag)) {
+        if (check_flag(response[tid].flag) && response[tid].mode==SERVER_READY) {
+            // printf("hiii %d %c\n", tid, response[tid].flag);
             response_received = true;
         } else {
             // Response not received yet, wait and retry
-            munmap(response, sizeof(response_t));
             usleep(100000); // Wait for 100 milliseconds before retrying
         }
     }
+    
 
-    switch (response->flag) {
+    switch (response[tid].flag) {
     case ADDED_SUCCESS:
         printf("Data added successfully\n");
         break;
@@ -106,7 +139,7 @@ int main(int argc, char *argv[]) {
         break;
 
     case FOUND:
-        printf("Received data: %s\n", response->value);
+        printf("Received data: %s\n", response[tid].value);
         break;
 
     case NOT_FOUND:
@@ -118,10 +151,15 @@ int main(int argc, char *argv[]) {
         break;
     }
 
+    
+    response[tid].flag = DEFAULT;
+    response[tid].mode = CLIENT_READY;
+
     // Close shared memory
-    munmap(request, sizeof(request_t));
-    munmap(response, sizeof(response_t));
-    close(shm_fd);
+    // munmap(request, sizeof(request_t)*NU);
+    // munmap(response, sizeof(response_t));
+    close(shm_fd_req);
+    close(shm_fd_res);
 
     return 0;
 }

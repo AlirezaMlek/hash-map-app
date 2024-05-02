@@ -25,7 +25,7 @@ Each record is an entity and is stored in a hash map. The client sends requests 
 Run these commands to perform insert, delete, and search operations:
 
 ```bash
-./server # start server
+./server <num buckets># start server
 ./client insert <key> "<value>" # insert string data with key <key> --- example: ./client insert 5 "this is a test"
 ./client delete <key> # delete record
 ./client search <key> # search record
@@ -39,16 +39,23 @@ You can check the application performance:
 
 * ### Client adds multiple records concurrently and searches them concurrently:
 
+##### Change <u>NUM_CACHE</u> to increase number of parallel processes
+
 ```bash
 ./test-client-send-multi <number of records>
 ```
 
+- #### When number of the concurrent requests (10) are equal to NUM_CACHE (10)
 ![Alt Text](./images/3.png)
+
+- #### When number of the concurrent requests (15) are higher than NUM_CACHE (10)
+As you can see, some of the requests are missed.
+![Alt Text](./images/4.png)
 
 
 * ### HashMap:
 
-1. Test insert: add 1000 records to each bucket
+1. Test insert: add 4000 records in 4 threads
 
 ```bash
 ./test/test-insert <number of buckets>
